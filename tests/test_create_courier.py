@@ -1,69 +1,37 @@
 import allure
+import pytest
 import requests
-from const import MessageText, Const
-from conftest import helpers
+from helpers.helper_data import CourierData, Courier
+from helpers.endpoints import Endpoints
+from helpers.urls import Urls
+from data.static_data import ResponseData
 
 
-class TestCreateCourier:
-    @allure.title('Проверка создания курьера со всеми обязательными полями')
-    def test_create_courier(self, helpers):
-        login, password, first_name = helpers.generate_data()
-        payload = {
-            "login": login,
-            "password": password,
-            "firstName": first_name
-        }
-        response = requests.post(Const.CREATE_COURIER, data=payload)
-        assert response.status_code == 201
-        assert MessageText.CREATE_COURIER in response.text
-        helpers.delete_courier(login, password)
+class TestCourierCreate:
+    @allure.title('Создание курьера')
+    @allure.description('Создать курьера, убедиться в получении положительного ответа сервера')
+    def test_registration_successful(self, courier):
+        courier_data = courier
+        assert courier_data['status_code'] == 201
+        assert ResponseData.courier_successful_response in courier_data['response_text']
+        courier_login = Courier().login_and_retrieve_courier_id(courier_data["data"])
+        Courier().delete_courier(courier_login["id"])
 
-
-    @allure.title('Проверка невозможности создания двух одинаковых курьеров')
-    def test_create_courier_twice(self, helpers):
-        data = helpers.register_new_courier_and_return_login_password()
-        response = requests.post(Const.CREATE_COURIER, data={
-            "login": data[0],
-            "password": data[1],
-            "firstName": data[2]
-        })
+    @allure.title('Повторное использование данных для регистрации курьера')
+    @allure.description('Повторное создание курьера, получение ожидаемой ошибки, удаление исходного курьера')
+    def test_double_registration_failed(self, courier):
+        courier_data = courier
+        first_courier_id = Courier().login_and_retrieve_courier_id(courier_data["data"])
+        response = requests.post(f'{Urls.SCOOTER_URL}{Endpoints.courier_create}', data=courier_data["data"])
         assert response.status_code == 409
-        assert MessageText.CREATE_COURIER_TWICE in response.text
+        assert ResponseData.same_login in response.text
+        Courier().delete_courier(first_courier_id["id"])
 
-
-    @allure.title('Проверка создания курьера без логина')
-    def test_create_courier_without_login(self, helpers):
-        login, password, first_name = helpers.generate_data()
-        payload = {
-            "password": password,
-            "firstName": first_name
-        }
-
-        response = requests.post(Const.CREATE_COURIER, data=payload)
+    @allure.title('Невозможность регистрации без логина или пароля')
+    @allure.description('Создать курьера без логина или пароля и убедиться в невозможности регистрации')
+    @pytest.mark.parametrize('courier_data', [CourierData.no_login_data,
+                                              CourierData.no_password_data])
+    def test_registration_without_params_failed(self, courier_data):
+        response = requests.post(f'{Urls.SCOOTER_URL}{Endpoints.courier_create}', data=courier_data)
         assert response.status_code == 400
-        assert MessageText.CREATE_COURIER_WITHOUT_LOGIN in response.text
-
-
-    @allure.title('Проверка создания курьера без пароля')
-    def test_create_courier_without_password(self, helpers):
-        login, password, first_name = helpers.generate_data()
-        payload = {
-            "login": login,
-            "firstName": first_name
-        }
-        response = requests.post(Const.CREATE_COURIER, data=payload)
-        assert response.status_code == 400
-        assert MessageText.CREATE_COURIER_WITHOUT_LOGIN in response.text
-
-
-    @allure.title('Проверка создания курьера без имени')
-    def test_create_courier_without_first_name(self, helpers):
-        login, password, first_name = helpers.generate_data()
-        payload = {
-            "login": login,
-            "password": password,
-        }
-        response = requests.post(Const.CREATE_COURIER, data=payload)
-        assert response.status_code == 201
-        assert MessageText.CREATE_COURIER in response.text
-        helpers.delete_courier(login, password)
+        assert ResponseData.not_enough_reg_data_response in response.text

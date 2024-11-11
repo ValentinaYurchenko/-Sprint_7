@@ -1,59 +1,34 @@
 import allure
+import pytest
 import requests
-from const import MessageText, Const
-from conftest import helpers
+from helpers.helper_data import CourierData, Courier
+from helpers.endpoints import Endpoints
+from helpers.urls import Urls
+from data.static_data import ResponseData
 
 
-class TestLoginCourier:
-    @allure.title('Проверка авторизации курьера')
-    def test_login_courier(self, helpers):
-        data = helpers.register_new_courier_and_return_login_password()
-        response = requests.post(Const.LOGIN_COURIER, data={
-            "login": data[0],
-            "password": data[1],
-        })
-        assert response.status_code == 200
-        assert MessageText.LOGING_COURIER in response.text
-        helpers.delete_courier(data[0], data[1])
+class TestCourierLogin:
+    @allure.title('Логин с корректными данными')
+    @allure.description('Логин курьера, подтверждение логина, удаление курьера')
+    def test_courier_login(self, courier):
+        courier_data = courier
+        response = Courier().login_and_retrieve_courier_id(courier_data['data'])
+        assert response['status_code'] == 200
+        assert response.get('id')
+        Courier().delete_courier(response["id"])
 
-
-    @allure.title('Проверка авторизации курьера без логина')
-    def test_login_courier_without_login(self, helpers):
-        data = helpers.register_new_courier_and_return_login_password()
-        response = requests.post(Const.LOGIN_COURIER, data={
-            "login": data[0],
-            "password": '',
-        })
+    @allure.title('Авторизация без логина или пароля невозможна')
+    @allure.description('Авторизация курьера без логина или пароля, ожидается ошибка')
+    @pytest.mark.parametrize('courier_data', [CourierData.no_login_data,
+                                              CourierData.no_password_data])
+    def test_courier_login_params_missing(self, courier_data):
+        response = requests.post(f'{Urls.SCOOTER_URL}{Endpoints.courier_login}', data=courier_data)
         assert response.status_code == 400
-        assert MessageText.LOGING_COURIER_WITHOUT_DATA in response.text
+        assert ResponseData.not_enough_login_data_response in response.text
 
-
-    @allure.title('Проверка авторизации курьера без пароля')
-    def test_login_courier_without_password(self, helpers):
-        data = helpers.register_new_courier_and_return_login_password()
-        response = requests.post(Const.LOGIN_COURIER, data={
-            "login": '',
-            "password": data[1],
-        })
-        assert response.status_code == 400
-        assert MessageText.LOGING_COURIER_WITHOUT_DATA in response.text
-
-
-    @allure.title('Проверка авторизации курьера без логина и пароля')
-    def test_login_courier_without_data(self, helpers):
-        response = requests.post(Const.LOGIN_COURIER, data={
-            "login": '',
-            "password": '',
-        })
-        assert response.status_code == 400
-        assert MessageText.LOGING_COURIER_WITHOUT_DATA in response.text
-
-
-    @allure.title('Проверка авторизации с несуществующими данными')
-    def test_login_courier_fake_data(self):
-        response = requests.post(Const.LOGIN_COURIER, data={
-            "login": 'victor',
-            "password": 'qwertyuiopasd',
-        })
+    @allure.title('Авторизация с null-данными')
+    @allure.description('Невозможность авторизации с null-данными')
+    def test_courier_login_null_data(self):
+        response = requests.post(f'{Urls.SCOOTER_URL}{Endpoints.courier_login}', data=CourierData.null_courier_data)
         assert response.status_code == 404
-        assert MessageText.LOGING_COURIER_FAKE_DATA in response.text
+        assert ResponseData.profile_404_response in response.text

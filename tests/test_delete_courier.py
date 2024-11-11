@@ -1,41 +1,31 @@
 import allure
-import requests
-from const import Const, MessageText
-from conftest import helpers
+from helpers.helper_data import Courier
+from data.static_data import ResponseData
 
 
 class TestDeleteCourier:
-    @allure.title('Проверка удаления курьера со всеми обязательными полями')
-    def test_delete_courier(self, helpers):
-        data = helpers.register_new_courier_and_return_login_password()
-        response_post = requests.post(Const.LOGIN_COURIER, data={
-            "login": data[0],
-            "password": data[1],
-        })
-        id = response_post.json()['id']
-        payload = {'id': id}
-        response_delete = requests.delete(f'{Const.DELETE_COURIER}{id}', data=payload)
-        assert response_delete.status_code == 200
-        assert MessageText.DELETE_COURIER in response_delete.text
+    @allure.title('Удаление курьера')
+    @allure.description('Удаление курьера, ожидание подтверждения сервером')
+    def test_courier_delete_success(self, courier):
+        courier_id = courier
+        courier_login = Courier().login_and_retrieve_courier_id(courier_id["data"])
+        response = Courier().delete_courier(courier_login["id"])
+        assert response["status_code"] == 200
+        assert ResponseData.courier_successful_response in response['response_text']
 
+    @allure.title('Удаление курьера с невалидным ID')
+    @allure.description('Удаление курьера с несуществующим в системе ID, ожидаемый ответ - 404 Not Found')
+    def test_courier_with_invalid_id_deletion_failed(self):
+        invalid_id = '111111'
+        response = Courier().delete_courier(invalid_id)
+        assert response['status_code'] == 404
+        assert ResponseData.invalid_id_response in response['response_text']
 
-    @allure.title('Проверка удаления курьера без id курьера')
-    def test_delete_courier_without_id(self, helpers):
-        response_delete = requests.delete(Const.DELETE_COURIER)
-        assert response_delete.status_code == 404
-        assert MessageText.DELETE_COURIER_WITHOUT_ID in response_delete.text
-        # здесь баг, ответ не совпадает со свагером
-
-
-    @allure.title('Проверка удаления курьера с несуществующим id курьера')
-    def test_delete_courier_fake_id(self, helpers):
-        data = helpers.register_new_courier_and_return_login_password()
-        response_post = requests.post(Const.LOGIN_COURIER, data={
-            "login": data[0],
-            "password": data[1],
-        })
-        id = response_post.json()['id']
-        payload = {'id': id}
-        response_delete = requests.delete(f'{Const.DELETE_COURIER}{id}1', data=payload)
-        assert response_delete.status_code == 404
-        assert MessageText.DELETE_COURIER_FAKE_ID in response_delete.text
+    @allure.title('Удаление курьера без ID')
+    @allure.description('Удаление курьера без ID, ожидаемый ответ - 500 Internal Server Error')
+    def test_delete_courier_without_id_failed(self):
+        courier_id = None
+        response = Courier().delete_courier(courier_id)
+        assert response['status_code'] == 500
+        assert ResponseData.null_id_response in response['response_text']
+        
